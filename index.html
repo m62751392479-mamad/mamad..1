@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>عصر پادشاهان</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#17251d;color:white;font-family:Tahoma,sans-serif}
+#game{position:absolute;inset:0}
+canvas{display:block}
+.panel{background:#17251dec;border:1px solid #b99b60;border-radius:12px;padding:10px}
+#top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;pointer-events:none}
+#title{color:#f5d58b;font-weight:bold}
+#stats{font-size:13px;display:flex;gap:12px;flex-wrap:wrap}
+#buttons{position:absolute;right:10px;bottom:15px;display:grid;grid-template-columns:repeat(2,100px);gap:7px}
+button{background:#405c42;color:white;border:1px solid #c4a66c;border-radius:9px;padding:11px 5px;font-size:12px;font-weight:bold;cursor:pointer}
+button:active{background:#8b7545}
+#controls{position:absolute;left:10px;bottom:15px;display:grid;gap:7px}
+#message{position:absolute;top:75px;left:50%;transform:translateX(-50%);display:none;white-space:nowrap}
+#modal{position:absolute;inset:0;background:#000a;display:none;align-items:center;justify-content:center;padding:15px}
+#box{width:min(430px,95vw);max-height:80vh;overflow:auto}
+h2{color:#f5d58b;margin-top:0}
+p{font-size:14px;line-height:2}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #ffffff25;padding:9px 0;font-size:13px}
+#close{width:100%;margin-top:12px;background:#765139}
+#hint{position:absolute;top:115px;left:50%;transform:translateX(-50%);font-size:12px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="top">
+ <div id="title" class="panel">⚔ عصر پادشاهان</div>
+ <div id="stats" class="panel">
+  🪙 سکه: <b id="gold">500</b>
+  👥 سرباز: <b id="soldiers">10</b>
+  ⭐ شهرت: <b id="fame">0</b>
+  ❤️ سلامتی: <b id="hp">100</b>
+ </div>
+</div>
+
+<div id="hint" class="panel">برای حرکت، روی زمین لمس کن.</div>
+<div id="message" class="panel"></div>
+
+<div id="controls">
+ <button id="zoom">نزدیک کردن دوربین</button>
+ <button id="rotate">چرخش دوربین</button>
+</div>
+
+<div id="buttons">
+ <button onclick="openRecruit()">استخدام سرباز</button>
+ <button onclick="openMarket()">بازار شهر</button>
+ <button onclick="openArmy()">مدیریت ارتش</button>
+ <button onclick="openQuest()">مأموریت‌ها</button>
+ <button onclick="battle()">نبرد</button>
+ <button onclick="openMap()">نقشه جهان</button>
+</div>
+
+<div id="modal">
+ <div id="box" class="panel">
+  <h2 id="modalTitle"></h2>
+  <div id="content"></div>
+  <button id="close">بازگشت به بازی</button>
+ </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x9bb8c0);
+scene.fog=new THREE.Fog(0x9bb8c0,60,180);
+
+const camera=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.1,300);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+document.getElementById("game").appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x52613e,2));
+const sun=new THREE.DirectionalLight(0xffe2b5,2);
+sun.position.set(-30,50,30);
+sun.castShadow=true;
+scene.add(sun);
+
+const material=c=>new THREE.MeshStandardMaterial({color:c});
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(220,220),material(0x718653));
+ground.rotation.x=-Math.PI/2;
+ground.receiveShadow=true;
+scene.add(ground);
+
+function building(x,z,w,h,d,color){
+ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(color));
+ m.position.set(x,h/2,z);
+ m.castShadow=true;
+ m.receiveShadow=true;
+ scene.add(m);
+ return m;
+}
+
+function tree(x,z){
+ const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.2,.3,1.5,8),material(0x65452d));
+ trunk.position.set(x,.75,z);
+ scene.add(trunk);
+ const leaves=new THREE.Mesh(new THREE.ConeGeometry(1.1,2.8,8),material(0x315b36));
+ leaves.position.set(x,2.5,z);
+ scene.add(leaves);
+}
+
+for(let i=0;i<100;i++){
+ let x=(Math.random()-.5)*180;
+ let z=(Math.random()-.5)*180;
+ if(Math.hypot(x-22,z-4)>20 && Math.hypot(x+25,z-15)>15)tree(x,z);
+}
+
+// جاده
+const road=new THREE.Mesh(new THREE.PlaneGeometry(7,100),material(0xb6a17b));
+road.rotation.x=-Math.PI/2;
+road.position.set(4,.02,0);
+scene.add(road);
+
+// شهر آذرگان
+building(25,8,25,5,1,0x9d896c);
+building(25,-16,25,5,1,0x9d896c);
+building(13,-4,1,5,24,0x9d896c);
+building(37,-4,1,5,24,0x9d896c);
+
+for(let x of [13,37]){
+ for(let z of [-16,8]){
+  building(x,z,3,8,3,0x80715d);
+ }
+}
+
+building(25,-5,12,8,9,0xb99a6d);
+building(25,5,3,10,3,0x876d4f);
+
+// روستا
+for(let i=0;i<8;i++){
+ let x=-30+(i%3)*6;
+ let z=15+Math.floor(i/3)*6;
+ building(x,z,4,3,4,0xb99a70);
+ const roof=new THREE.Mesh(new THREE.ConeGeometry(3,2,4),material(0x754536));
+ roof.position.set(x,4,z);
+ roof.rotation.y=Math.PI/4;
+ scene.add(roof);
+}
+
+// شخصیت
+function createPerson(color){
+ const group=new THREE.Group();
+ const body=new THREE.Mesh(new THREE.CapsuleGeometry(.45,.9,4,8),material(color));
+ body.position.y=1.2;
+ group.add(body);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.32,12,12),material(0xd4a47e));
+ head.position.y=2.1;
+ group.add(head);
+ const legs=[];
+ for(let x of [-.2,.2]){
+  const leg=new THREE.Mesh(new THREE.BoxGeometry(.22,.7,.25),material(0x49392d));
+  leg.position.set(x,.4,0);
+  group.add(leg);
+  legs.push(leg);
+ }
+ group.userData.legs=legs;
+ return group;
+}
+
+const player=createPerson(0x294e79);
+scene.add(player);
+player.position.set(0,0,0);
+
+const npcs=[];
+for(let i=0;i<6;i++){
+ const n=createPerson(i%2?0x7b4b35:0x526b48);
+ n.position.set(20+Math.random()*8,0,-7+Math.random()*12);
+ scene.add(n);
+ npcs.push(n);
+}
+
+// متغیرهای بازی
+let gold=500,soldiers=10,fame=0,hp=100;
+let target=null,angle=0,distance=10,walk=0;
+const clock=new THREE.Clock();
+
+function updateStats(){
+ document.getElementById("gold").textContent=gold;
+ document.getElementById("soldiers").textContent=soldiers;
+ document.getElementById("fame").textContent=fame;
+ document.getElementById("hp").textContent=hp;
+}
+
+function say(text){
+ const e=document.getElementById("message");
+ e.textContent=text;
+ e.style.display="block";
+ clearTimeout(e.timer);
+ e.timer=setTimeout(()=>e.style.display="none",2500);
+}
+
+function open(title,html){
+ document.getElementById("modalTitle").textContent=title;
+ document.getElementById("content").innerHTML=html;
+ document.getElementById("modal").style.display="flex";
+}
+
+function close(){
+ document.getElementById("modal").style.display="none";
+}
+document.getElementById("close").onclick=close;
+
+// حرکت با لمس یا کلیک
+const raycaster=new THREE.Raycaster();
+const mouse=new THREE.Vector2();
+const plane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+
+renderer.domElement.addEventListener("pointerdown",e=>{
+ mouse.x=e.clientX/innerWidth*2-1;
+ mouse.y=-(e.clientY/innerHeight)*2+1;
+ raycaster.setFromCamera(mouse,camera);
+ const point=new THREE.Vector3();
+ if(raycaster.ray.intersectPlane(plane,point)){
+  target=new THREE.Vector3(point.x,0,point.z);
+ }
+});
+
+function openRecruit(){
+ open("استخدام سرباز",`
+ <p>سربازان تازه استخدام کن و ارتش خود را بزرگ‌تر کن.</p>
+ <div class="row">پیاده‌نظام — ۵۰ سکه <button onclick="recruit(50)">استخدام</button></div>
+ <div class="row">کماندار — ۷۰ سکه <button onclick="recruit(70)">استخدام</button></div>
+ <div class="row">سواره‌نظام — ۱۲۰ سکه <button onclick="recruit(120)">استخدام</button></div>
+ `);
+}
+
+function recruit(cost){
+ if(gold<cost){say("سکه کافی نداری.");return;}
+ gold-=cost;
+ soldiers++;
+ updateStats();
+ say("سرباز جدید به ارتش پیوست.");
+}
+
+function openMarket(){
+ if(Math.hypot(player.position.x-25,player.position.z+5)>23){
+  say("برای ورود به بازار به شهر نزدیک شو.");
+  return;
+ }
+ open("بازار شهر آذرگان",`
+ <p>به بازار شهر خوش آمدی.</p>
+ <div class="row">خرید آذوقه — ۳۰ سکه <button onclick="buyFood()">خرید</button></div>
+ <div class="row">فروش غنیمت — ۴۰ سکه <button onclick="sellLoot()">فروش</button></div>
+ <div class="row">خرید زره — ۱۰۰ سکه <button onclick="buyArmor()">خرید</button></div>
+ `);
+}
+
+function buyFood(){
+ if(gold<30){say("سکه کافی نداری.");return;}
+ gold-=30;updateStats();say("آذوقه خریداری شد.");
+}
+function sellLoot(){
+ gold+=40;updateStats();say("غنیمت فروخته شد.");
+}
+function buyArmor(){
+ if(gold<100){say("سکه کافی نداری.");return;}
+ gold-=100;hp=Math.min(100,hp+20);updateStats();say("زره خریداری شد.");
+}
+
+function openArmy(){
+ open("مدیریت ارتش",`
+ <p>تعداد سربازان: ${soldiers}</p>
+ <p>هزینه روزانه ارتش: ${soldiers*2} سکه</p>
+ <p>روحیه ارتش: خوب</p>
+ <button onclick="train()">تمرین ارتش</button>
+ `);
+}
+
+function train(){
+ if(gold<20){say("برای تمرین ۲۰ سکه لازم داری.");return;}
+ gold-=20;fame++;updateStats();say("تمرین انجام شد.");
+}
+
+function openQuest(){
+ open("مأموریت‌ها",`
+ <h3>درخواست کدخدای سبزدشت</h3>
+ <p>به روستای سبزدشت در غرب شهر برو و از اهالی محافظت کن.</p>
+ <p>پاداش: ۱۰۰ سکه و ۵ شهرت</p>
+ <button onclick="finishQuest()">دریافت پاداش مأموریت</button>
+ `);
+}
+
+function finishQuest(){
+ gold+=100;fame+=5;updateStats();
+ say("مأموریت انجام شد!");
+ close();
+}
+
+function battle(){
+ open("نبرد تمرینی",`
+ <p>گروهی از راهزنان در نزدیکی شهر دیده شده‌اند.</p>
+ <p>قدرت سپاه شما: ${soldiers*10}</p>
+ <p>قدرت دشمن: ۶۰</p>
+ <button onclick="fight()">شروع نبرد</button>
+ `);
+}
+
+function fight(){
+ if(soldiers*10>=60){
+  gold+=80;fame+=3;
+  say("پیروز شدی! ۸۰ سکه دریافت کردی.");
+ }else{
+  hp=Math.max(10,hp-15);
+  say("شکست خوردی. سپاه قوی‌تری لازم داری.");
+ }
+ updateStats();close();
+}
+
+function openMap(){
+ open("نقشه جهان",`
+ <p>🏰 آذرگان: شهر مرکزی در شرق</p>
+ <p>🏡 سبزدشت: روستا در غرب</p>
+ <p>⚔ دشت شاهین: میدان نبرد در شمال</p>
+ <p>برای حرکت، روی زمین لمس کن.</p>
+ `);
+}
+
+document.getElementById("zoom").onclick=()=>{
+ distance=Math.max(5,distance-1);
+};
+document.getElementById("rotate").onclick=()=>{
+ angle+=Math.PI/4;
+};
+
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.05);
+
+ if(target){
+  const dx=target.x-player.position.x;
+  const dz=target.z-player.position.z;
+  const d=Math.hypot(dx,dz);
+  if(d>.3){
+   const step=Math.min(d,dt*5);
+   player.position.x+=dx/d*step;
+   player.position.z+=dz/d*step;
+   player.rotation.y=Math.atan2(dx,dz);
+   walk+=dt*9;
+   player.userData.legs[0].rotation.x=Math.sin(walk)*.5;
+   player.userData.legs[1].rotation.x=-Math.sin(walk)*.5;
+  }else target=null;
+ }
+
+ const desired=new THREE.Vector3(
+  player.position.x+Math.sin(angle)*distance,
+  5,
+  player.position.z+Math.cos(angle)*distance
+ );
+ camera.position.lerp(desired,.1);
+ camera.lookAt(player.position.x,1,player.position.z);
+
+ renderer.render(scene,camera);
+}
+animate();
+
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+
+updateStats();
+</script>
+</body>
+</html>
